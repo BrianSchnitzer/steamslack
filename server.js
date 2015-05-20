@@ -2,7 +2,8 @@
 //  OpenShift sample Node application
 var express = require('express');
 var fs      = require('fs');
-
+var Steam = require('steam-webapi');
+var request = require('request');
 
 /**
  *  Define the sample application.
@@ -39,11 +40,15 @@ var SampleApp = function() {
      */
     self.populateCache = function() {
         if (typeof self.zcache === "undefined") {
-            self.zcache = { 'index.html': '' };
+            self.zcache = {
+                'index.html': '',
+                'slack.html': ''
+            };
         }
 
         //  Local cache for static content.
         self.zcache['index.html'] = fs.readFileSync('./index.html');
+        self.zcache['slack.html'] = fs.readFileSync('./slack.html');
     };
 
 
@@ -104,6 +109,37 @@ var SampleApp = function() {
             res.setHeader('Content-Type', 'text/html');
             res.send(self.cache_get('index.html') );
         };
+
+        self.routes['/slack'] = function(req, res) {
+
+            Steam.key = '3CABF6B2D8C98BAF8E6BC64D107D38FF';
+            Steam.ready(function(err){
+               if(err) return console.log(err);
+
+                var steam = new Steam();
+
+                steam.getPlayerSummaries({steamids: '76561197982429034,76561197962840405'}, function(err, data){
+
+                    request({
+                        url: 'https://hooks.slack.com/services/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',
+                        method: 'POST',
+                        qs: {payload: "{'text': 'This is a test'}"}
+                    }, function(error, resp, body){
+                        res.setHeader('Content-Type', 'application/json');
+                        if(error){
+                            res.send(error);
+                        }else{
+                            res.send(resp.statusCode + " --- " + body);
+                        }
+                    });
+
+
+
+                });
+            });
+
+
+        };
     };
 
 
@@ -119,6 +155,7 @@ var SampleApp = function() {
         for (var r in self.routes) {
             self.app.get(r, self.routes[r]);
         }
+        self.app.use('/js', express.static(__dirname + '/js'));
     };
 
 
