@@ -4,6 +4,7 @@ var express = require('express');
 var fs      = require('fs');
 var Steam = require('steam-webapi');
 var request = require('request');
+var _ = require('underscore');
 
 /**
  *  Define the sample application.
@@ -110,35 +111,88 @@ var SampleApp = function() {
             res.send(self.cache_get('index.html') );
         };
 
-        self.routes['/slack'] = function(req, res) {
+        self.routes['/slack/steam'] = function(req, res) {
 
-            Steam.key = '3CABF6B2D8C98BAF8E6BC64D107D38FF';
-            Steam.ready(function(err){
-               if(err) return console.log(err);
+            var token = req.param('token');
+            var channel = req.param('channel_name');
 
-                var steam = new Steam();
+            if(token == "H881BlB0P9inb5staqKemTON"){
+                Steam.key = '3CABF6B2D8C98BAF8E6BC64D107D38FF';
+                Steam.ready(function(err){
+                    if(err) return console.log(err);
 
-                steam.getPlayerSummaries({steamids: '76561197982429034,76561197962840405'}, function(err, data){
+                    var steam = new Steam();
 
-                    request({
-                        url: 'https://hooks.slack.com/services/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',
-                        method: 'POST',
-                        qs: {payload: "{'text': 'This is a test'}"}
-                    }, function(error, resp, body){
-                        res.setHeader('Content-Type', 'application/json');
-                        if(error){
-                            res.send(error);
-                        }else{
-                            res.send(resp.statusCode + " --- " + body);
+                    var steamIDs = [
+                        "76561197982429034", //Brian
+                        "76561197962840405", //David S
+                        "76561198097867159", //Dom
+                        "76561198011446886", //Khan
+                        "76561198008899629", //Sarah
+                        "76561197972790147", //Rob
+                        "76561197979980572", //Dave B
+                        "76561198080732494" //Marshall
+                    ];
+
+                    steam.getPlayerSummaries({steamids: steamIDs.join()}, function(err, data){
+
+                        var states = {
+                            "0": "Offline",
+                            "1": "Online",
+                            "2": "Busy",
+                            "3": "Away",
+                            "4": "Snooze"
+                        };
+
+                        var fields = [];
+
+                        for(var i = 0; i < data.players.length; i++){
+                            var curPerson = data.players[i];
+
+                            //Save state value, overwrite if playing game
+                            var value = states[curPerson.personastate];
+                            if(curPerson.gameextrainfo){
+                                value = "Playing " + curPerson.gameextrainfo;
+                            }else if(curPerson.communityvisibilitystate == 1){
+                                value = "Paranoid - We'll never know!";
+                            }
+
+                            //Build field for person
+                            var person = {
+                                "title": curPerson.personaname,
+                                "value": value,
+                                "short": false
+                            };
+
+                            fields.push(person);
                         }
+
+                        fields = _.sortBy(fields, function(obj){ return (obj.title).toLowerCase(); });
+
+                        var message = {
+                            "channel": "#" + channel,
+                            "fallback": "Shit's broke",
+                            "color": "#cccccc",
+                            "fields": fields
+                        };
+
+                        request({
+                            url: 'https://hooks.slack.com/services/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',
+                            method: 'POST',
+                            form: {payload: JSON.stringify(message)}
+                        }, function(error, resp, body){
+                            if(error){
+                                console.log(error);
+                            }else{
+                                console.log(resp.statusCode + " --- " + body);
+                            }
+                        });
                     });
-
-
-
                 });
-            });
-
-
+            }else{
+                res.setHeader('Content-Type', 'text/html');
+                res.send("<h2>Bad Token</h2>");
+            }
         };
     };
 
