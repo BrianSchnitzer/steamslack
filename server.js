@@ -5,6 +5,7 @@ var fs      = require('fs');
 var Steam = require('steam-webapi');
 var request = require('request');
 var _ = require('underscore');
+var mongojs = require('mongojs');
 
 /**
  *  Define the sample application.
@@ -14,6 +15,10 @@ var SampleApp = function() {
     //  Scope.
     var self = this;
 
+    //DB Setup
+    var dbName = "/steamslack";
+    var connection_string = process.env.OPENSHIFT_MONGODB_DB_USERNAME + ":" +  process.env.OPENSHIFT_MONGODB_DB_PASSWORD + "@" + process.env.OPENSHIFT_MONGODB_DB_HOST + dbName;
+    var db = mongojs(connection_string, ['users']);
 
     /*  ================================================================  */
     /*  Helper functions.                                                 */
@@ -32,7 +37,7 @@ var SampleApp = function() {
             //  allows us to run/test the app locally.
             console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
             self.ipaddress = "127.0.0.1";
-        };
+        }
     };
 
 
@@ -112,27 +117,74 @@ var SampleApp = function() {
         };
 
         self.routes['/slack/steam'] = function(req, res) {
+            self.getSteamStatus(req, res)
+        };
 
-            var token = req.param('token');
-            var channel = req.param('channel_name');
+        self.routes['/slack/lift'] = function(req, res) {
+            self.lift(req, res)
+        };
+    };
 
-            if(token == "H881BlB0P9inb5staqKemTON"){
+
+    /**
+     *  Initialize the server (express) and create the routes and register
+     *  the handlers.
+     */
+    self.initializeServer = function() {
+        self.createRoutes();
+        self.app = express.createServer();
+
+        //  Add handlers for the app (from the routes).
+        for (var r in self.routes) {
+            self.app.get(r, self.routes[r]);
+        }
+        self.app.use('/js', express.static(__dirname + '/js'));
+    };
+
+
+    /**
+     *  Initializes the sample application.
+     */
+    self.initialize = function() {
+        self.setupVariables();
+        self.populateCache();
+        self.setupTerminationHandlers();
+
+        // Create the express server and routes.
+        self.initializeServer();
+    };
+
+
+    /**
+     *  Start the server (starts up the sample application).
+     */
+    self.start = function() {
+        //  Start the app on the specific interface (and port).
+        self.app.listen(self.port, self.ipaddress, function() {
+            console.log('%s: Node server started on %s:%d ...',
+                        Date(Date.now() ), self.ipaddress, self.port);
+        });
+    };
+
+    self.getSteamStatus = function(req, res){
+        var token = req.param('token');
+        var channel = req.param('channel_name');
+
+        if(token == "H881BlB0P9inb5staqKemTON"){
+
+            var steamIDs = [];
+
+            db.users.find(function(err, users){
+
+                for(var i = 0; i < users.length; i++){
+                    steamIDs.push(users[i].steamId);
+                }
+
                 Steam.key = '3CABF6B2D8C98BAF8E6BC64D107D38FF';
                 Steam.ready(function(err){
                     if(err) return console.log(err);
 
                     var steam = new Steam();
-
-                    var steamIDs = [
-                        "76561197982429034", //Brian
-                        "76561197962840405", //David S
-                        "76561198097867159", //Dom
-                        "76561198011446886", //Khan
-                        "76561198008899629", //Sarah
-                        "76561197972790147", //Rob
-                        "76561197979980572", //Dave B
-                        "76561198080732494" //Marshall
-                    ];
 
                     steam.getPlayerSummaries({steamids: steamIDs.join()}, function(err, data){
 
@@ -189,52 +241,33 @@ var SampleApp = function() {
                         });
                     });
                 });
-            }else{
-                res.setHeader('Content-Type', 'text/html');
-                res.send("<h2>Bad Token</h2>");
-            }
-        };
-    };
-
-
-    /**
-     *  Initialize the server (express) and create the routes and register
-     *  the handlers.
-     */
-    self.initializeServer = function() {
-        self.createRoutes();
-        self.app = express.createServer();
-
-        //  Add handlers for the app (from the routes).
-        for (var r in self.routes) {
-            self.app.get(r, self.routes[r]);
+            });
+        }else{
+            res.setHeader('Content-Type', 'text/html');
+            res.send("<h2>Bad Token</h2>");
         }
-        self.app.use('/js', express.static(__dirname + '/js'));
     };
 
+    self.lift = function(req, res){
+        //Data
+        /*[
+            { "steamId": "76561197982429034", "slackName": "boomdog83", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561197962840405", "slackName": "kosherbaked", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198097867159", "slackName": "mrpoopa", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198011446886", "slackName": "khan", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198008899629", "slackName": "sarahfitz", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561197972790147", "slackName": "rob", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561197979980572", "slackName": "davefish", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198080732494", "slackName": "marshall", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } }
+        ]*/
 
-    /**
-     *  Initializes the sample application.
-     */
-    self.initialize = function() {
-        self.setupVariables();
-        self.populateCache();
-        self.setupTerminationHandlers();
-
-        // Create the express server and routes.
-        self.initializeServer();
-    };
-
-
-    /**
-     *  Start the server (starts up the sample application).
-     */
-    self.start = function() {
-        //  Start the app on the specific interface (and port).
-        self.app.listen(self.port, self.ipaddress, function() {
-            console.log('%s: Node server started on %s:%d ...',
-                        Date(Date.now() ), self.ipaddress, self.port);
+        db.users.find(function(err, docs){
+            res.setHeader('Content-Type', 'text/html');
+            res.send("WOWOWOWOW: " + docs);
         });
+
+
+
     };
 
 };   /*  Sample Application.  */
