@@ -223,7 +223,7 @@ var SampleApp = function() {
 
                         var message = {
                             "channel": "#" + channel,
-                            "fallback": "Shit's broke",
+                            "fallback": "Steam Status",
                             "color": "#cccccc",
                             "fields": fields
                         };
@@ -261,13 +261,96 @@ var SampleApp = function() {
             { "steamId": "76561198080732494", "slackName": "marshall", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } }
         ]*/
 
-        db.users.find(function(err, docs){
+        var token = req.param('token');
+
+        if(token == 'tBtgwXX3wHGiMyxENbRe8SAp'){
+
+            //Possible actions entered by user
+            var actions = [
+                "bench",
+                "squat",
+                "deadlift",
+                "injure"
+            ];
+
             res.setHeader('Content-Type', 'text/html');
-            res.send("WOWOWOWOW: " + docs);
-        });
 
+            //Get the params entered by the user
+            var params = (req.param('text')).split(" ");
 
+            //If the user entered anything other than 2 params
+            if(params.length != 2) {
+                res.send("Bad command, please follow the pattern '/lift PERSON_NAME ACTION'.");
 
+            //Make sure they entered a valid action
+            }else if(!_.some(actions, function(action){ return action === params[1].toLowerCase(); })){
+                res.send("Invalid action, options are: bench, squat, deadlift, and injure.");
+            }else{
+                var slackName = params[0].toLowerCase();
+                var action = params[1].toLowerCase();
+
+                //Get the user info based on the slack name entered
+                db.users.findOne({slackName: slackName}, function(err, user){
+                    if(err || !user){
+                        res.send(slackName + " does not exist.");
+                    }else{
+                        var oldPR = user.lifting[action];
+                        var newPR;
+
+                        //Randomly boost or injure a user's lift depending on action entered
+                        if(action != "injure"){
+                            newPR = oldPR + Math.floor(Math.random() * 10) + 1;
+                        }else{
+                            //Randomly choose a lift to hurt
+                            action = actions[Math.floor(Math.random() * (actions.length - 1))];
+                            oldPR = user.lifting[action];
+                            newPR = oldPR - Math.floor(Math.random() * 10) + 1;
+                        }
+
+                        var liftVerb;
+
+                        if(newPR > oldPR){
+                            liftVerb = "boosted";
+                        }else{
+                            liftVerb = "hurt";
+                        }
+
+                        var output = req.param('user_name') + " " + liftVerb + " " + slackName + "'s " + action + " by " + (newPR - oldPR) + ". ";
+                        output += "It is now at " + newPR + "lbs.";
+
+                        //This hack allows for the dynamic updating of MongoDB
+                        var setLift = {};
+                        setLift['lifting.' + action] = newPR;
+                        db.users.update({slackName: slackName}, {$set: setLift});
+
+                        var message = {
+                            "channel": "#" + req.param('channel_name'),
+                            "fallback": "A lift has occurred!",
+                            "color": "#cccccc",
+                            "text": output
+                        };
+
+                        //Send data back to slack
+                        request({
+                            url: 'https://hooks.slack.com/services/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',
+                            method: 'POST',
+                            form: {payload: JSON.stringify(message)}
+                        }, function(error, resp, body){
+                            if(error){
+                                console.log(error);
+                            }else{
+                                console.log(resp.statusCode + " --- " + body);
+                            }
+                        });
+
+                    }
+                });
+            }
+        }else{
+            //db.users.update({slackName: "rob"}, {$set: {"lifting.bench": 100}});
+            res.setHeader('Content-Type', 'text/html');
+            res.send("<h2>Bad Token</h2>");
+        }
     };
 
 };   /*  Sample Application.  */
