@@ -277,22 +277,31 @@ var SampleApp = function() {
 
             //Get the params entered by the user
             var params = (req.param('text')).split(" ");
+            var sender = req.param('user_name');
+
 
             //If the user entered anything other than 2 params
             if(params.length != 2) {
                 res.send("Bad command, please follow the pattern '/lift PERSON_NAME ACTION'.");
 
             //Make sure they entered a valid action
-            }else if(!_.some(actions, function(action){ return action === params[1].toLowerCase(); })){
+            }else if(!_.some(actions, function(action){ return action === params[1].toLowerCase(); })) {
                 res.send("Invalid action, options are: bench, squat, deadlift, and injure.");
+            }else if(sender.toLowerCase() == params[0].toLowerCase()){
+                res.send("You cannot 'Lift' yourself.");
             }else{
                 var slackName = params[0].toLowerCase();
                 var action = params[1].toLowerCase();
 
                 //Get the user info based on the slack name entered
                 db.users.findOne({slackName: slackName}, function(err, user){
-                    if(err || !user){
+                    if(err || !user) {
                         res.send(slackName + " does not exist.");
+                    }else if(user.lifting.lastLift && user.lifting.lastLift >= (Date.now() - 300000)){
+                        var timeDiff = 300000 - (Date.now() - user.lifting.lastLift);
+                        var mins = (timeDiff/1000/60) << 0;
+                        var secs = Math.ceil((timeDiff/1000) % 60);
+                        res.send(slackName + " needs to rest for " + mins + " minutes and " + secs + " seconds.");
                     }else{
                         var oldPR = user.lifting[action];
                         var newPR;
@@ -315,12 +324,13 @@ var SampleApp = function() {
                             liftVerb = "hurt";
                         }
 
-                        var output = req.param('user_name') + " " + liftVerb + " " + slackName + "'s " + action + " by " + (newPR - oldPR) + ". ";
+                        var output = sender + " " + liftVerb + " " + slackName + "'s " + action + " by " + (newPR - oldPR) + ". ";
                         output += "It is now at " + newPR + "lbs.";
 
                         //This hack allows for the dynamic updating of MongoDB
                         var setLift = {};
                         setLift['lifting.' + action] = newPR;
+                        setLift['lifting.lastLift'] = Date.now();
                         db.users.update({slackName: slackName}, {$set: setLift});
 
                         var message = {
@@ -351,6 +361,12 @@ var SampleApp = function() {
             res.setHeader('Content-Type', 'text/html');
             res.send("<h2>Bad Token</h2>");
         }
+    };
+
+    //Helper function to
+    self.now = function(){
+        var date = new Date();
+        return date.getTime();
     };
 
 };   /*  Sample Application.  */
