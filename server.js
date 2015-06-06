@@ -18,7 +18,7 @@ var SampleApp = function() {
     //DB Setup
     var dbName = "/steamslack";
     var connection_string = process.env.OPENSHIFT_MONGODB_DB_USERNAME + ":" +  process.env.OPENSHIFT_MONGODB_DB_PASSWORD + "@" + process.env.OPENSHIFT_MONGODB_DB_HOST + dbName;
-    var db = mongojs(connection_string, ['users']);
+    var db = mongojs(connection_string, ['users', 'meet']);
 
     /*  ================================================================  */
     /*  Helper functions.                                                 */
@@ -228,17 +228,7 @@ var SampleApp = function() {
                             "fields": fields
                         };
 
-                        request({
-                            url: 'https://hooks.slack.com/services/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',
-                            method: 'POST',
-                            form: {payload: JSON.stringify(message)}
-                        }, function(error, resp, body){
-                            if(error){
-                                console.log(error);
-                            }else{
-                                console.log(resp.statusCode + " --- " + body);
-                            }
-                        });
+                        self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
                     });
                 });
             });
@@ -263,13 +253,17 @@ var SampleApp = function() {
 
         var token = req.param('token');
 
-        if(token == 'tBtgwXX3wHGiMyxENbRe8SAp'){
+        if(token == 'tBtgwXX3wHGiMyxENbRe8SAp') {
 
-            //Possible actions entered by user
-            var actions = [
+            //Possible lifts entered by user
+            var lifts = [
                 "bench",
                 "squat",
-                "deadlift",
+                "deadlift"
+            ];
+
+            var actions = [
+                "lift",
                 "injure"
             ];
 
@@ -279,14 +273,53 @@ var SampleApp = function() {
             var params = (req.param('text')).split(" ");
             var sender = req.param('user_name');
 
+            if (params.length == 1) {
+                if (params[0] != "meet") {
+                    res.send("Bad command, please follow the pattern '/lift PERSON_NAME ACTION OR [meet]'.");
+                } else {
+
+                    db.meet.find(function(err, meet){
+                        if(err) {
+                            res.send("An error has occurred!");
+                        }else if(meet[0].lastMeet >= (Date.now() - 3600000)){
+                            var timeDiff = 3600000 - (Date.now() - meet[0].lastMeet);
+                            var mins = (timeDiff/1000/60) << 0;
+                            var secs = Math.ceil((timeDiff/1000) % 60);
+                            res.send("The next meet cannot be called for another " + mins + " minutes and " + secs + " seconds.");
+                        }else{
+                            db.users.find(function(err, users){
+                                users = _.sortBy(users, function(user){
+                                    var total = self.getTotal(user);
+                                    return -total;
+                                });
+
+                                var output = sender + " has called a meet! The winners are:\n";
+                                output += "1st: " + users[0].slackName + " with a total of " + self.getTotal(users[0]) + "lbs!\n";
+                                output += "2nd: " + users[1].slackName + " with a total of " + self.getTotal(users[1]) + "lbs!\n";
+                                output += "3rd: " + users[2].slackName + " with a total of " + self.getTotal(users[2]) + "lbs!\n";
+
+                                var message = {
+                                    "channel": "#" + req.param('channel_name'),
+                                    "fallback": "A meet has occurred!",
+                                    "color": "#cccccc",
+                                    "text": output
+                                };
+
+                                db.meet.update({}, {$set: {lastMeet: Date.now()}});
+
+                                self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
+                            });
+                        }
+                    });
+                }
 
             //If the user entered anything other than 2 params
-            if(params.length != 2) {
-                res.send("Bad command, please follow the pattern '/lift PERSON_NAME ACTION'.");
+            }else if(params.length != 2) {
+                res.send("Bad command, please follow the pattern '/lift [PERSON_NAME ACTION] OR [meet]'.");
 
             //Make sure they entered a valid action
             }else if(!_.some(actions, function(action){ return action === params[1].toLowerCase(); })) {
-                res.send("Invalid action, options are: bench, squat, deadlift, and injure.");
+                res.send("Invalid action, options are: lift or injure.");
             }else if(sender.toLowerCase() == params[0].toLowerCase()){
                 res.send("You cannot 'Lift' yourself.");
             }else{
@@ -303,33 +336,27 @@ var SampleApp = function() {
                         var secs = Math.ceil((timeDiff/1000) % 60);
                         res.send(slackName + " needs to rest for " + mins + " minutes and " + secs + " seconds.");
                     }else{
-                        var oldPR = user.lifting[action];
-                        var newPR;
 
-                        //Randomly boost or injure a user's lift depending on action entered
-                        if(action != "injure"){
-                            newPR = oldPR + Math.floor(Math.random() * 10) + 1;
-                        }else{
-                            //Randomly choose a lift to hurt
-                            action = actions[Math.floor(Math.random() * (actions.length - 1))];
-                            oldPR = user.lifting[action];
-                            newPR = oldPR - Math.floor(Math.random() * 10) + 1;
-                        }
-
-                        var liftVerb;
-
-                        if(newPR > oldPR){
-                            liftVerb = "boosted";
-                        }else{
-                            liftVerb = "hurt";
-                        }
-
-                        var output = sender + " " + liftVerb + " " + slackName + "'s " + action + " by " + (newPR - oldPR) + ". ";
-                        output += "It is now at " + newPR + "lbs.";
+                        var output = sender;
 
                         //This hack allows for the dynamic updating of MongoDB
                         var setLift = {};
-                        setLift['lifting.' + action] = newPR;
+
+                        if(action == "lift"){
+                            var lift = lifts[Math.floor(Math.random() * lifts.length)];
+                            var oldPR = user.lifting[lift];
+                            var newPR = oldPR + Math.floor(Math.random() * 10) + 1;
+
+                            output += " boosted " + slackName + "'s " + lift + " by " + (newPR - oldPR) + "lbs. It is now at " + newPR + "lbs!";
+                            setLift['lifting.' + lift] = newPR;
+                        }else{
+                            var oldHealth = user.lifting.health;
+                            var newHealth = oldHealth - (Math.floor(Math.random() * 5) + 1);
+
+                            output += " lowered " + slackName + "'s health by " + Math.abs(newHealth - oldHealth) + ". It is now at " + newHealth + ".";
+                            setLift['lifting.health'] = newHealth;
+                        }
+
                         setLift['lifting.lastLift'] = Date.now();
                         db.users.update({slackName: slackName}, {$set: setLift});
 
@@ -340,24 +367,11 @@ var SampleApp = function() {
                             "text": output
                         };
 
-                        //Send data back to slack
-                        request({
-                            url: 'https://hooks.slack.com/services/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',
-                            method: 'POST',
-                            form: {payload: JSON.stringify(message)}
-                        }, function(error, resp, body){
-                            if(error){
-                                console.log(error);
-                            }else{
-                                console.log(resp.statusCode + " --- " + body);
-                            }
-                        });
-
+                        self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
                     }
                 });
             }
         }else{
-            //db.users.update({slackName: "rob"}, {$set: {"lifting.bench": 100}});
             res.setHeader('Content-Type', 'text/html');
             res.send("<h2>Bad Token</h2>");
         }
@@ -368,6 +382,26 @@ var SampleApp = function() {
         var date = new Date();
         return date.getTime();
     };
+
+    self.getTotal = function(user){
+        var total = user.lifting.bench + user.lifting.squat + user.lifting.deadlift;
+        return Math.floor(total * (user.lifting.health/100));
+    };
+
+    self.sendWebHookCall = function(message, url){
+        //Send data back to slack
+        request({
+            url: url,
+            method: 'POST',
+            form: {payload: JSON.stringify(message)}
+        }, function(error, resp, body){
+            if(error){
+                console.log(error);
+            }else{
+                console.log(resp.statusCode + " --- " + body);
+            }
+        });
+    }
 
 };   /*  Sample Application.  */
 
