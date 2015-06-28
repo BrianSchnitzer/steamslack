@@ -188,15 +188,13 @@ var SampleApp = function() {
 
                     steam.getPlayerSummaries({steamids: steamIDs.join()}, function(err, data){
 
-                        var states = {
-                            "0": "Offline",
-                            "1": "Online",
-                            "2": "Busy",
-                            "3": "Away",
-                            "4": "Snooze"
-                        };
+                        var states = ["Offline", "Online", "Busy", "Away", "Snooze"];
 
                         var fields = [];
+
+                        data.players = _.reject(data.players, function(player){
+                            return player.personastate === 0;
+                        });
 
                         for(var i = 0; i < data.players.length; i++){
                             var curPerson = data.players[i];
