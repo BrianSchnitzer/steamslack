@@ -193,7 +193,7 @@ var SampleApp = function() {
                         var fields = [];
 
                         data.players = _.reject(data.players, function(player){
-                            return player.personastate === 0;
+                            return player.personastate === 0  && player.communityvisibilitystate !== 1;
                         });
 
                         for(var i = 0; i < data.players.length; i++){
