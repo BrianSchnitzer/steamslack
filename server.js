@@ -188,7 +188,7 @@ var SampleApp = function() {
 
                     steam.getPlayerSummaries({steamids: steamIDs.join()}, function(err, data){
 
-                        var states = ["Offline", "Online", "Busy", "Away", "Snooze"];
+                        var states = ["Offline", "Online", "Busy", "Away", "Snooze", "Looking to Trade", "Looking to Play"];
 
                         var fields = [];
 
