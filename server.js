@@ -246,7 +246,11 @@ var SampleApp = function() {
             { "steamId": "76561198008899629", "slackName": "sarahfitz", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
             { "steamId": "76561197972790147", "slackName": "rob", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
             { "steamId": "76561197979980572", "slackName": "davefish", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
-            { "steamId": "76561198080732494", "slackName": "marshall", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } }
+            { "steamId": "76561198080732494", "slackName": "marshall", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198019962370", "slackName": "nick", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198047692130", "slackName": "christian", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561198160566620", "slackName": "shelby", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
+            { "steamId": "76561197999806429", "slackName": "buttons", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } }
         ]*/
 
         var token = req.param('token');
