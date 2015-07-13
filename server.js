@@ -6,6 +6,7 @@ var Steam = require('steam-webapi');
 var request = require('request');
 var _ = require('underscore');
 var mongojs = require('mongojs');
+var Q = require('q');
 
 /**
  *  Define the sample application.
@@ -38,6 +39,18 @@ var SampleApp = function() {
             console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
             self.ipaddress = "127.0.0.1";
         }
+
+        self.webhookURLs = {
+          STEAM_STATUS: 'https://hooks.slack.com/services/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',
+          LIFT: 'https://hooks.slack.com/services/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',
+          POE_STATUS: 'https://hooks.slack.com/services/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'
+        };
+
+        self.webhookTokens = {
+            STEAM_STATUS: 'H881BlB0P9inb5staqKemTON',
+            LIFT: 'tBtgwXX3wHGiMyxENbRe8SAp',
+            POE_STATUS: 'lqKyHvF8tUfgmQKH0jmUUiwF'
+        };
     };
 
 
@@ -117,7 +130,11 @@ var SampleApp = function() {
         };
 
         self.routes['/slack/steam'] = function(req, res) {
-            self.getSteamStatus(req, res)
+            self.getSteamStatus(req, res);
+        };
+
+        self.routes['/slack/poe-status'] = function(req, res) {
+            self.getPoEStatus(req, res);
         };
 
         self.routes['/slack/lift'] = function(req, res) {
@@ -170,7 +187,7 @@ var SampleApp = function() {
         var token = req.param('token');
         var channel = req.param('channel_name');
 
-        if(token == "H881BlB0P9inb5staqKemTON"){
+        if(token === self.webhookTokens.STEAM_STATUS){
 
             var steamIDs = [];
 
@@ -226,7 +243,7 @@ var SampleApp = function() {
                             "fields": fields
                         };
 
-                        self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
+                        self.sendWebHookCall(message, self.webhookURLs.STEAM_STATUS);
                     });
                 });
             });
@@ -236,8 +253,67 @@ var SampleApp = function() {
         }
     };
 
+    self.getPoEStatus = function(req, res){
+        var token = req.param('token');
+        var channel = req.param('channel_name');
+
+
+        if(token === self.webhookTokens.POE_STATUS){
+            var allPromises = [];
+
+            db.users.find({poe: {$exists: true}}, function(err, users){
+
+                _.forEach(users, function(user){
+                    allPromises.push(getPoEAccountInfo(user.poe.poeAccountName));
+                });
+
+                Q.all(allPromises).done(handleData);
+            });
+
+            var handleData = function(accounts){
+                var fields = [];
+                _.forEach(accounts, function(account){
+                    if(!_.isEmpty(account) && _.isObject(account)){
+                        var value = '';
+                        var accountName;
+                        _.chain(account)
+                            .sortBy(function(char){
+                                return char.level;
+                            })
+                            .forEach(function(char){
+                                accountName = char.accountName;
+                                value += ' - ' + char.charName;
+                                value += ' (' + char.level + ')';
+                                value += (char.online ? ' -- Online' : '') + '\n\n';
+                            });
+                        var person = {
+                            "title": accountName,
+                            "value": value,
+                            "short": false
+                        };
+
+                        fields.push(person);
+                    }
+                });
+
+                var message = {
+                    "channel": "#" + channel,
+                    "fallback": "PoE Status",
+                    "color": "#AE2C1A",
+                    "fields": fields
+                };
+                self.sendWebHookCall(message, self.webhookURLs.POE_STATUS);
+            };
+
+        }else{
+            res.setHeader('Content-Type', 'text/html');
+            res.send("<h2>Bad Token</h2>");
+        }
+
+    };
+
     self.lift = function(req, res){
-        //Data
+        //Data -- OUTDATED, EXAMPLE ONLY
         /*[
             { "steamId": "76561197982429034", "slackName": "boomdog83", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
             { "steamId": "76561197962840405", "slackName": "kosherbaked", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
@@ -251,11 +327,12 @@ var SampleApp = function() {
             { "steamId": "76561198047692130", "slackName": "christian", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
             { "steamId": "76561198160566620", "slackName": "shelby", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } },
             { "steamId": "76561197999806429", "slackName": "buttons", "lifting": { "bench": 100, "squat": 150, "deadlift": 200, "health": 100 } }
+            //db.users.update({slackName: "boomdog83"}, {$set: {poe: {poeAccountName: "Boomdog83"}}})
         ]*/
 
         var token = req.param('token');
 
-        if(token == 'tBtgwXX3wHGiMyxENbRe8SAp') {
+        if(token === self.webhookTokens.LIFT) {
 
             //Possible lifts entered by user
             var lifts = [
@@ -309,7 +386,7 @@ var SampleApp = function() {
 
                                 db.meet.update({}, {$set: {lastMeet: Date.now()}});
 
-                                self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
+                                self.sendWebHookCall(message, self.webhookURLs.LIFT);
                             });
                         }
                     });
@@ -369,7 +446,7 @@ var SampleApp = function() {
                             "text": output
                         };
 
-                        self.sendWebHookCall(message, 'https://hooks.slack.com/services/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');
+                        self.sendWebHookCall(message, self.webhookURLs.LIFT);
                     }
                 });
             }
@@ -379,7 +456,7 @@ var SampleApp = function() {
         }
     };
 
-    //Helper function to
+    //Helper function to get the current time
     self.now = function(){
         var date = new Date();
         return date.getTime();
@@ -403,7 +480,29 @@ var SampleApp = function() {
                 console.log(resp.statusCode + " --- " + body);
             }
         });
+    };
+
+    //Private functions
+    function getPoEAccountInfo(accountName){
+        var deferred = Q.defer();
+
+        //do stuff
+        request({
+            url: 'http://api.exiletools.com/ladder?league=warbands&short=1&accountName='+accountName,
+            method: 'GET',
+            json: true
+        }, function(error, resp, body){
+            if(error){
+                console.log(error);
+                deferred.resolve(null);
+            }else{
+                console.log(resp.statusCode + " --- " + body);
+                deferred.resolve(body);
+            }
+        });
+        return deferred.promise;
     }
+
 
 };   /*  Sample Application.  */
 
