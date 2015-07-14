@@ -7,6 +7,8 @@ var request = require('request');
 var _ = require('underscore');
 var mongojs = require('mongojs');
 var Q = require('q');
+var CronJob = require('cron').CronJob;
+var cheerio = require('cheerio');
 
 /**
  *  Define the sample application.
@@ -19,7 +21,7 @@ var SampleApp = function() {
     //DB Setup
     var dbName = "/steamslack";
     var connection_string = process.env.OPENSHIFT_MONGODB_DB_USERNAME + ":" +  process.env.OPENSHIFT_MONGODB_DB_PASSWORD + "@" + process.env.OPENSHIFT_MONGODB_DB_HOST + dbName;
-    var db = mongojs(connection_string, ['users', 'meet']);
+    var db = mongojs(connection_string, ['users', 'meet', 'poeTrade']);
 
     /*  ================================================================  */
     /*  Helper functions.                                                 */
@@ -41,9 +43,10 @@ var SampleApp = function() {
         }
 
         self.webhookURLs = {
-          STEAM_STATUS: 'https://hooks.slack.com/services/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',
-          LIFT: 'https://hooks.slack.com/services/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',
-          POE_STATUS: 'https://hooks.slack.com/services/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'
+            STEAM_STATUS: 'https://hooks.slack.com/services/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',
+            LIFT: 'https://hooks.slack.com/services/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',
+            POE_STATUS: 'https://hooks.slack.com/services/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',
+            POE_TRADE_CRON: 'https://hooks.slack.com/services/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'
         };
 
         self.webhookTokens = {
@@ -51,6 +54,7 @@ var SampleApp = function() {
             LIFT: 'tBtgwXX3wHGiMyxENbRe8SAp',
             POE_STATUS: 'lqKyHvF8tUfgmQKH0jmUUiwF'
         };
+
     };
 
 
@@ -181,6 +185,11 @@ var SampleApp = function() {
             console.log('%s: Node server started on %s:%d ...',
                         Date(Date.now() ), self.ipaddress, self.port);
         });
+
+        //Start the poe trade cron job
+        var poeTradeJob = new CronJob('00 */10 * * * *', function(){
+            checkPoeTrade();
+        }, null, true);
     };
 
     self.getSteamStatus = function(req, res){
@@ -270,12 +279,12 @@ var SampleApp = function() {
                 Q.all(allPromises).done(handleData);
             });
 
-            var handleData = function(accounts){
+            function handleData(accounts){
                 var fields = [];
                 _.forEach(accounts, function(account){
                     if(!_.isEmpty(account) && _.isObject(account)){
                         var value = '';
-                        var accountName;
+                        var accountName = '';
                         _.chain(account)
                             .sortBy(function(char){
                                 return char.level;
@@ -486,7 +495,7 @@ var SampleApp = function() {
     function getPoEAccountInfo(accountName){
         var deferred = Q.defer();
 
-        //do stuff
+        //Get the ladder stats for this account
         request({
             url: 'http://api.exiletools.com/ladder?league=warbands&short=1&accountName='+accountName,
             method: 'GET',
@@ -503,9 +512,145 @@ var SampleApp = function() {
         return deferred.promise;
     }
 
+    function getPoeTradeData(check){
+        var deferred = Q.defer();
+
+        //Get the ladder stats for this account
+        request('http://poe.trade/search/' + check.searchUrl, function(error, resp, html){
+            if(!error){
+                var items = [];
+                var $ = cheerio.load(html);
+
+                //Build the item from the html
+                $('.item').each(function(i, elem){
+                    var priceInChaos = $(elem).find('.requirements .sortable[data-value]').attr('data-value');
+                    if(priceInChaos && -priceInChaos <= check.maxPrice) {
+                        var item = {};
+                        item.name = $(elem).attr('data-name');
+                        item.buyout = $(elem).attr('data-buyout');
+                        item.seller = $(elem).attr('data-seller');
+                        item.thread = $(elem).attr('data-thread');
+                        item.priceInChaos = -priceInChaos;
+                        item.priceDrop = null;
+                        items.push(item);
+                    }
+                });
+
+                var newItems = [];
+
+                //if there are previous results, need to only save new items that hadn't been found before
+                if(!_.isEmpty(check.previousResults)){
+                    var oldItems = [];
+                    //If any new items have matching names and sellers, don't save them -- unless they've dropped in price
+                    _.forEach(items, function(item){
+                        var isNew = true;
+                        _.forEach(check.previousResults, function(prevResult){
+                           if(prevResult.name === item.name && prevResult.seller === item.seller) {
+                               if(prevResult.priceInChaos > item.priceInChaos){
+                                   item.priceDrop = prevResult.buyout;
+                               }else{
+                                   //Save all old items that are matched, and overwrite previousItems so that no-longer-existing items aren't maintained
+                                   oldItems.push(prevResult);
+                                   isNew = false;
+                               }
+                           }
+                        });
+
+                        if(isNew){
+                            //Add the item to oldItems to keep track of it, and newItems to send to the client
+                            oldItems.push(item);
+                            newItems.push(item);
+                        }
+                    });
+
+                    check.previousResults = oldItems;
+
+                }else{
+                    //If previousResults doesn't exist or is empty, keep all new items and store them all in previous items
+                    newItems = items;
+                    check.previousResults = newItems;
+                }
+
+                check.newItems = newItems;
+
+                //Update the DB with the new check
+                db.poeTrade.update(
+                    {searchUrl: check.searchUrl},
+                    {
+                        $set: {
+                            previousResults: check.previousResults
+                        }
+                    }
+                );
+
+                deferred.resolve(check);
+            }
+        });
+        return deferred.promise;
+    }
+
+    function checkPoeTrade(){
+        var allPromises = [];
+
+        var getPoeTradeChecks = function(){
+            var deferred = Q.defer();
+            db.poeTrade.find(function(err, poeTradeChecks){
+                _.forEach(poeTradeChecks, function(check){
+                    allPromises.push(getPoeTradeData(check));
+                });
+                deferred.resolve();
+            });
+            return deferred.promise;
+        };
+
+        var buildPoeTradeOutput = function(){
+            Q.all(allPromises).done(function(results){
+                var attachments = [];
+                //Loop through each poe trade query and make an attachmet for it
+                _.forEach(results, function(tradeCheck){
+                    if(!_.isEmpty(tradeCheck.newItems)){
+                        var fields = [];
+                        var text = '<@' + tradeCheck.requester + '>, Hargan has found you some new stuff!\n\n';
+                        //Loop through each new item in that query and make a field for it
+                        _.forEach(tradeCheck.newItems, function(newItem){
+                            var value = "Price: " + newItem.buyout + (newItem.priceDrop ? ' (Down from ' + newItem.priceDrop + ')' : '') +'\n';
+                            value += 'From ' + newItem.seller + ' in thread <https://www.pathofexile.com/forum/view-thread/' + newItem.thread + '| ' + newItem.thread + '>\n\n';
+                            var itemField = {
+                                "title": newItem.name,
+                                "value": value,
+                                "short": false
+                            };
+                            fields.push(itemField);
+                        });
+
+                        var checkAttachment = {
+                            "fallback": text,
+                            "title": tradeCheck.searchTitle,
+                            "text": text,
+                            "color": "#00CD00",
+                            "fields": fields
+                        };
+
+                        attachments.push(checkAttachment);
+                    }
+                });
+
+                //If there is data to send, send it
+                if(!_.isEmpty(attachments)){
+                    var message = {
+                        "attachments": attachments
+                    };
+
+                    self.sendWebHookCall(message, self.webhookURLs.POE_TRADE_CRON);
+                }
+            });
+        };
+
+        getPoeTradeChecks().then(buildPoeTradeOutput);
+
+    }
 
 };   /*  Sample Application.  */
-
 
 
 /**
