@@ -284,7 +284,7 @@ var SampleApp = function() {
                                 accountName = char.accountName;
                                 value += ' - ' + char.charName;
                                 value += ' (' + char.level + ')';
-                                value += (char.online ? ' -- Online' : '') + '\n\n';
+                                value += (char.online === '1' ? ' -- Online' : '') + '\n\n';
                             });
                         var person = {
                             "title": accountName,
