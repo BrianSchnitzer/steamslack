@@ -626,6 +626,7 @@ var SampleApp = function() {
                         var checkAttachment = {
                             "fallback": text,
                             "title": tradeCheck.searchTitle,
+                            "title_link": 'http://poe.trade/search/' + tradeCheck.searchUrl,
                             "text": text,
                             "color": "#00CD00",
                             "fields": fields
