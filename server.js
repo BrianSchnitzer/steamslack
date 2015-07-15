@@ -524,7 +524,7 @@ var SampleApp = function() {
                 //Build the item from the html
                 $('.item').each(function(i, elem){
                     var priceInChaos = $(elem).find('.requirements .sortable[data-value]').attr('data-value');
-                    if(priceInChaos && -priceInChaos <= check.maxPrice) {
+                    if(priceInChaos) {
                         var item = {};
                         item.name = $(elem).attr('data-name');
                         item.buyout = $(elem).attr('data-buyout');
