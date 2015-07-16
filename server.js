@@ -46,7 +46,7 @@ var SampleApp = function() {
             STEAM_STATUS: 'https://hooks.slack.com/services/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',
             LIFT: 'https://hooks.slack.com/services/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',
             POE_STATUS: 'https://hooks.slack.com/services/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',
-            POE_TRADE_CRON: 'https://hooks.slack.com/services/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'
+            HARGANS_TRADE_WATCH: 'https://hooks.slack.com/services/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'
         };
 
         self.webhookTokens = {
@@ -54,6 +54,35 @@ var SampleApp = function() {
             LIFT: 'tBtgwXX3wHGiMyxENbRe8SAp',
             POE_STATUS: 'lqKyHvF8tUfgmQKH0jmUUiwF'
         };
+
+        self.hargan = {
+            sassLevel: 0,
+            quotes: [
+                'Don\'t drop the soap, exile.',
+                'Stay away from the shadows exile, unless you\'re doing a crit build...',
+                'Two Chisels is my favorite artist, TRUUU.',
+                'Make sure you\'re on permanent allocation, wouldn\'t want to get Dom\'d.',
+                'Sometimes you just need to gag the cat.',
+                'How long you spend in Act 3?',
+                'Did you hear how great Dom\'s new build is this league?',
+                'Did you know divines can sometimes do nothing?',
+                'Apparently you can hold shift to hold your breath!',
+                'That\'s a nice five link chest you have there, I\'ll give you three alt shards for it.',
+                'That\'ll be one transmutation... Woah nice colors on that item, I\'ll give you a chrome for that!',
+                'Maybe one day one of you will kill Uber Atziri...',
+                'I heard Warbands is the best league yet.',
+                'Legend has it that one guy\'s build was so defensively effective that he got angry at the game and quit.',
+                'Who needs defence when you kill everything in two seconds?',
+                'If your Glorious Leader is so glorious, why hasn\'t he killed Uber Atziri?',
+                'A wise man once said: More bikes less cars on road.  I\'m not quite sure what it means, but I like it.',
+                'Yes, I\'ll gladly give you some alchemy shards for that Carcass Jack... moron.',
+                'Act 4 is fun, right?',
+                'Krillson showed me the best fishing spot yesterday.',
+                'Have you ever been so bored at work that you just started making up random stuff to say?',
+                'Huh? Oh sorry I was busy looking for items within your unrealistic price ranges...',
+                'Hey this guy is selling his item way below market value!  Just kidding, copy paste can be a bitch.'
+            ]
+        }
 
     };
 
@@ -636,19 +665,42 @@ var SampleApp = function() {
                     }
                 });
 
-                //If there is data to send, send it
+                //If there is data to send, send it, otherwise, run hargan
                 if(!_.isEmpty(attachments)){
                     var message = {
                         "attachments": attachments
                     };
 
-                    self.sendWebHookCall(message, self.webhookURLs.POE_TRADE_CRON);
+                    self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
+                }else{
+                    hargan();
                 }
             });
         };
 
         getPoeTradeChecks().then(buildPoeTradeOutput);
 
+    }
+
+    function hargan(){
+        //Checks if Hargan should talk
+        if(self.hargan.sassLevel > _.random(1, 250)){
+            var quote = self.hargan.quotes[_.random(0, self.hargan.quotes.length - 1)];
+            var message = {
+                "attachments": [
+                    {
+                        "fallback": quote,
+                        "title": 'Hargan',
+                        "text": quote,
+                        "color": "#FF9653"
+                    }
+                ]
+            };
+            self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
+            self.hargan.sassLevel = 0;
+        }else{
+            self.hargan.sassLevel += _.random(1, 10);
+        }
     }
 
 };   /*  Sample Application.  */
