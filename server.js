@@ -82,7 +82,7 @@ var SampleApp = function() {
                 'Huh? Oh sorry I was busy looking for items within your unrealistic price ranges...',
                 'Hey this guy is selling his item way below market value!  Just kidding, copy paste can be a bitch.'
             ]
-        }
+        };
 
     };
 
@@ -341,7 +341,7 @@ var SampleApp = function() {
                     "fields": fields
                 };
                 self.sendWebHookCall(message, self.webhookURLs.POE_STATUS);
-            };
+            }
 
         }else{
             res.setHeader('Content-Type', 'text/html');
@@ -684,7 +684,7 @@ var SampleApp = function() {
 
     function hargan(){
         //Checks if Hargan should talk
-        if(self.hargan.sassLevel > _.random(1, 250)){
+        if(self.hargan.sassLevel > _.random(1, 200)){
             var quote = self.hargan.quotes[_.random(0, self.hargan.quotes.length - 1)];
             var message = {
                 "attachments": [
