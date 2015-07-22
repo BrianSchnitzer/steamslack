@@ -9,6 +9,7 @@ var mongojs = require('mongojs');
 var Q = require('q');
 var CronJob = require('cron').CronJob;
 var cheerio = require('cheerio');
+var elasticsearch = require('elasticsearch');
 
 /**
  *  Define the sample application.
@@ -21,7 +22,7 @@ var SampleApp = function() {
     //DB Setup
     var dbName = "/steamslack";
     var connection_string = process.env.OPENSHIFT_MONGODB_DB_USERNAME + ":" +  process.env.OPENSHIFT_MONGODB_DB_PASSWORD + "@" + process.env.OPENSHIFT_MONGODB_DB_HOST + dbName;
-    var db = mongojs(connection_string, ['users', 'meet', 'poeTrade']);
+    var db = mongojs(connection_string, ['users', 'meet', 'poeTrade', 'exileTools']);
 
     /*  ================================================================  */
     /*  Helper functions.                                                 */
@@ -173,6 +174,10 @@ var SampleApp = function() {
         self.routes['/slack/lift'] = function(req, res) {
             self.lift(req, res)
         };
+
+        self.routes['/testing'] = function(req, res) {
+            self.testing(req, res)
+        };
     };
 
 
@@ -217,7 +222,7 @@ var SampleApp = function() {
 
         //Start the poe trade cron job
         //var poeTradeJob = new CronJob('00 */10 * * * *', function(){
-        //    checkPoeTrade();
+        //    getTradeChecks();
         //}, null, true);
     };
 
@@ -494,6 +499,10 @@ var SampleApp = function() {
         }
     };
 
+    self.testing = function(req, res){
+        getTradeChecks();
+    };
+
     //Helper function to get the current time
     self.now = function(){
         var date = new Date();
@@ -541,28 +550,42 @@ var SampleApp = function() {
         return deferred.promise;
     }
 
-    function getPoeTradeData(check){
+    function getTradeChecks(){
+        var allPromises = [];
+
+        db.exileTools.find(function(err, poeTradeChecks){
+            _.forEach(poeTradeChecks, function(check){
+                allPromises.push(getTradeData(check));
+            });
+            Q.all(allPromises).done(buildTradeOutput);
+        });
+    }
+
+    function getTradeData(check){
         var deferred = Q.defer();
 
-        //Get the ladder stats for this account
-        request('http://poe.trade/search/' + check.searchUrl, function(error, resp, html){
-            if(!error){
-                var items = [];
-                var $ = cheerio.load(html);
+        var source = makeSearch(check.searchRules);
+        console.log(JSON.stringify(source));
 
-                //Build the item from the html
-                $('.item').each(function(i, elem){
-                    var priceInChaos = $(elem).find('.requirements .sortable[data-value]').attr('data-value');
-                    if(priceInChaos) {
-                        var item = {};
-                        item.name = $(elem).attr('data-name');
-                        item.buyout = $(elem).attr('data-buyout');
-                        item.seller = $(elem).attr('data-seller');
-                        item.thread = $(elem).attr('data-thread');
-                        item.priceInChaos = -priceInChaos;
-                        item.priceDrop = null;
-                        items.push(item);
-                    }
+        request({
+            url: 'http://api.exiletools.com/item/_search?source=' + JSON.stringify(source),
+            method: 'GET'
+        }, function(error, resp, body){
+            if(!error){
+                console.log(body);
+                var items = [];
+
+                var hits = (JSON.parse(body)).hits.hits;
+
+                _.forEach(hits, function(hit){
+                    var item = {};
+                    item.name = hit._source.info.fullName;
+                    item.buyout = hit._source.shop.amount + ' ' + hit._source.shop.currency;
+                    item.seller = hit._source.shop.sellerAccount;
+                    item.thread = hit._source.shop.threadid;
+                    item.priceInChaos = hit._source.shop.chaosEquiv;
+                    item.priceDrop = null;
+                    items.push(item);
                 });
 
                 var newItems = [];
@@ -603,8 +626,8 @@ var SampleApp = function() {
                 check.newItems = newItems;
 
                 //Update the DB with the new check
-                db.poeTrade.update(
-                    {searchUrl: check.searchUrl},
+                db.exileTools.update(
+                    {searchTitle: check.searchTitle},
                     {
                         $set: {
                             previousResults: check.previousResults
@@ -618,68 +641,48 @@ var SampleApp = function() {
         return deferred.promise;
     }
 
-    function checkPoeTrade(){
-        var allPromises = [];
-
-        var getPoeTradeChecks = function(){
-            var deferred = Q.defer();
-            db.poeTrade.find(function(err, poeTradeChecks){
-                _.forEach(poeTradeChecks, function(check){
-                    allPromises.push(getPoeTradeData(check));
-                });
-                deferred.resolve();
-            });
-            return deferred.promise;
-        };
-
-        var buildPoeTradeOutput = function(){
-            Q.all(allPromises).done(function(results){
-                var attachments = [];
-                //Loop through each poe trade query and make an attachmet for it
-                _.forEach(results, function(tradeCheck){
-                    if(!_.isEmpty(tradeCheck.newItems)){
-                        var fields = [];
-                        var text = '<@' + tradeCheck.requester + '>, Hargan has found you some new stuff!\n\n';
-                        //Loop through each new item in that query and make a field for it
-                        _.forEach(tradeCheck.newItems, function(newItem){
-                            var value = "Price: " + newItem.buyout + (newItem.priceDrop ? ' (Down from ' + newItem.priceDrop + ')' : '') +'\n';
-                            value += 'From ' + newItem.seller + ' in thread <https://www.pathofexile.com/forum/view-thread/' + newItem.thread + '| ' + newItem.thread + '>\n\n';
-                            var itemField = {
-                                "title": newItem.name,
-                                "value": value,
-                                "short": false
-                            };
-                            fields.push(itemField);
-                        });
-
-                        var checkAttachment = {
-                            "fallback": text,
-                            "title": tradeCheck.searchTitle,
-                            "title_link": 'http://poe.trade/search/' + tradeCheck.searchUrl,
-                            "text": text,
-                            "color": "#00CD00",
-                            "fields": fields
-                        };
-
-                        attachments.push(checkAttachment);
-                    }
-                });
-
-                //If there is data to send, send it, otherwise, run hargan
-                if(!_.isEmpty(attachments)){
-                    var message = {
-                        "attachments": attachments
+    function buildTradeOutput(results){
+        var attachments = [];
+        //Loop through each poe trade query and make an attachmet for it
+        _.forEach(results, function(tradeCheck){
+            if(!_.isEmpty(tradeCheck.newItems)){
+                var fields = [];
+                var text = '<@' + tradeCheck.requester + '>, Hargan has found you some new stuff!\n\n';
+                //Loop through each new item in that query and make a field for it
+                _.forEach(tradeCheck.newItems, function(newItem){
+                    var value = "Price: " + newItem.buyout + (newItem.priceDrop ? ' (Down from ' + newItem.priceDrop + ')' : '') +'\n';
+                    value += 'From ' + newItem.seller + ' in thread <https://www.pathofexile.com/forum/view-thread/' + newItem.thread + '| ' + newItem.thread + '>\n\n';
+                    var itemField = {
+                        "title": newItem.name,
+                        "value": value,
+                        "short": false
                     };
+                    fields.push(itemField);
+                });
 
-                    self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
-                }else{
-                    hargan();
-                }
-            });
-        };
+                var checkAttachment = {
+                    "fallback": text,
+                    "title": tradeCheck.searchTitle,
+                    "title_link": 'http://poe.trade/search/' + tradeCheck.searchUrl,
+                    "text": text,
+                    "color": "#00CD00",
+                    "fields": fields
+                };
 
-        getPoeTradeChecks().then(buildPoeTradeOutput);
+                attachments.push(checkAttachment);
+            }
+        });
 
+        //If there is data to send, send it, otherwise, run hargan
+        if(!_.isEmpty(attachments)){
+            var message = {
+                "attachments": attachments
+            };
+
+            self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
+        }else{
+            hargan();
+        }
     }
 
     function hargan(){
@@ -701,6 +704,36 @@ var SampleApp = function() {
         }else{
             self.hargan.sassLevel += _.random(1, 10);
         }
+    }
+
+    function makeSearch(params){
+        var baseBody = {
+            "query": {
+                "filtered" : {
+                    "filter" : {
+                        "bool" : {
+                            "must" : [
+                                { "term" : { "league" : "Warbands" } },
+                                { "term" : { "verified" : "yes" } }
+                            ],
+                            "must_not" : [
+                                { "term" : { "currency" : "NONE"}},
+                                { "term" : { "currency" : "Unknown"}}
+                            ]
+                        }
+                    }
+                }
+            },
+            "size": 100
+        };
+
+        _.forEach(params, function(rule, type){
+            var tempObj = {};
+            tempObj[type] = rule;
+            baseBody.query.filtered.filter.bool.must.push(tempObj);
+        });
+
+        return baseBody;
     }
 
 };   /*  Sample Application.  */
