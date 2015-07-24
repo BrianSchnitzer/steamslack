@@ -221,9 +221,9 @@ var SampleApp = function() {
         });
 
         //Start the poe trade cron job
-        //var poeTradeJob = new CronJob('00 */10 * * * *', function(){
-        //    getTradeChecks();
-        //}, null, true);
+        var poeTradeJob = new CronJob('00 */10 * * * *', function(){
+            getTradeChecks();
+        }, null, true);
     };
 
     self.getSteamStatus = function(req, res){
@@ -500,7 +500,8 @@ var SampleApp = function() {
     };
 
     self.testing = function(req, res){
-        getTradeChecks();
+        res.setHeader('Content-Type', 'text/html');
+        res.send("<h2>No Tests</h2>");
     };
 
     //Helper function to get the current time
