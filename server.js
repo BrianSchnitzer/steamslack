@@ -688,7 +688,7 @@ var SampleApp = function() {
 
     function hargan(){
         //Checks if Hargan should talk
-        if(self.hargan.sassLevel > _.random(1, 200)){
+        if(self.hargan.sassLevel > _.random(1, 300)){
             var quote = self.hargan.quotes[_.random(0, self.hargan.quotes.length - 1)];
             var message = {
                 "attachments": [
