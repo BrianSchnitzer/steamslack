@@ -501,7 +501,7 @@ var SampleApp = function() {
 
     self.testing = function(req, res){
         res.setHeader('Content-Type', 'text/html');
-        res.send("<h2>No Tests</h2>");
+        res.send("<h2>Testing</h2>");
     };
 
     //Helper function to get the current time
@@ -682,13 +682,17 @@ var SampleApp = function() {
 
             self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
         }else{
-            hargan();
+            var date = new Date();
+            var hours = date.getHours();
+            if(hours >= 9 || hours < 3){
+                hargan();
+            }
         }
     }
 
     function hargan(){
         //Checks if Hargan should talk
-        if(self.hargan.sassLevel > _.random(1, 300)){
+        if(self.hargan.sassLevel > _.random(120, 280)){
             var quote = self.hargan.quotes[_.random(0, self.hargan.quotes.length - 1)];
             var message = {
                 "attachments": [
@@ -703,7 +707,7 @@ var SampleApp = function() {
             self.sendWebHookCall(message, self.webhookURLs.HARGANS_TRADE_WATCH);
             self.hargan.sassLevel = 0;
         }else{
-            self.hargan.sassLevel += _.random(1, 10);
+            self.hargan.sassLevel += _.random(1, 3);
         }
     }
 
