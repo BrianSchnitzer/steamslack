@@ -57,7 +57,7 @@ var SampleApp = function() {
         };
 
         self.hargan = {
-            sassLevel: 0,
+            sassLevel: 40, //start at 40 to avoid never talking after new upload -- should be in DB...
             quotes: [
                 'Don\'t drop the soap, exile.',
                 'Stay away from the shadows exile, unless you\'re doing a crit build...',
@@ -81,7 +81,15 @@ var SampleApp = function() {
                 'Krillson showed me the best fishing spot yesterday.',
                 'Have you ever been so bored at work that you just started making up random stuff to say?',
                 'Huh? Oh sorry I was busy looking for items within your unrealistic price ranges...',
-                'Hey this guy is selling his item way below market value!  Just kidding, copy paste can be a bitch.'
+                'Hey this guy is selling his item way below market value!  Just kidding, copy paste can be a bitch.',
+                'PSA: Marsh is paying anyone who can find him another build where he doesn\'t have to do anything.',
+                'Is that a right build?',
+                'Wow a 6 T1 chest?  Too bad it\'s not Lightning Coil',
+                'How \'bout them Shavronne\'s Wrappings, so many cool builds, like uh, uhhh...',
+                'Soccer with cars?  Yeah that\'s great and all, but Wrealclast isn\'t gonna cleanse itself.',
+                'Tell that douche Gruest to "Travel far"..., up Silk\'s ass!  Ahaha, aha, ha...',
+                'Some people don\'t like to pick up rares, some people have Orbs of Alchemy.',
+                'I think Dialla just wants a little cockroach if you know what I\'m sayin\'.'
             ]
         };
 
