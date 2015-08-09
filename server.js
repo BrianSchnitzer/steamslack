@@ -606,7 +606,7 @@ var SampleApp = function() {
                     _.forEach(items, function(item){
                         var isNew = true;
                         _.forEach(check.previousResults, function(prevResult){
-                           if(prevResult.name === item.name && prevResult.seller === item.seller) {
+                           if(_.isEqual(prevResult, item)) {
                                if(prevResult.priceInChaos > item.priceInChaos){
                                    item.priceDrop = prevResult.buyout;
                                }else{
