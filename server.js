@@ -322,6 +322,18 @@ var SampleApp = function() {
             });
 
             function handleData(accounts){
+                var levelEXP = {
+                    88: 1646943474,
+                    89: 1784977296,
+                    90: 1934009687,
+                    91: 2094900291,
+                    92: 2268549086,
+                    93: 2455921256,
+                    94: 2658074992,
+                    95: 2876116901,
+                    96: 3111280300,
+                    97: 3364828162
+                };
                 var fields = [];
                 _.forEach(accounts, function(account){
                     if(!_.isEmpty(account) && _.isObject(account)){
@@ -329,12 +341,14 @@ var SampleApp = function() {
                         var accountName = '';
                         _.chain(account)
                             .sortBy(function(char){
-                                return char.level;
+                                return -char.level;
                             })
                             .forEach(function(char){
                                 accountName = char.accountName;
                                 value += ' - ' + char.charName;
-                                value += ' (' + char.level + ')';
+                                var xp = Math.round((char.experience - levelEXP[char.level])/(levelEXP[parseInt(char.level, 10) + 1] - levelEXP[char.level])*100);
+
+                                value += ' (' + char.level + '.' + xp + ')';
                                 value += (char.online === '1' ? ' -- Online' : '') + '\n\n';
                             });
                         var person = {
@@ -351,7 +365,10 @@ var SampleApp = function() {
                     "channel": "#" + channel,
                     "fallback": "PoE Status",
                     "color": "#AE2C1A",
-                    "fields": fields
+                    "fields": _.sortBy(fields, function(field){
+                        var match = field.value.match(/\(([^)]+)\)/);
+                        return -match[1];
+                    })
                 };
                 self.sendWebHookCall(message, self.webhookURLs.POE_STATUS);
             }
@@ -574,14 +591,12 @@ var SampleApp = function() {
         var deferred = Q.defer();
 
         var source = makeSearch(check.searchRules);
-        console.log(JSON.stringify(source));
 
         request({
             url: 'http://api.exiletools.com/item/_search?source=' + JSON.stringify(source),
             method: 'GET'
         }, function(error, resp, body){
             if(!error){
-                console.log(body);
                 var items = [];
 
                 var hits = (JSON.parse(body)).hits.hits;
