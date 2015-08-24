@@ -346,9 +346,9 @@ var SampleApp = function() {
                             .forEach(function(char){
                                 accountName = char.accountName;
                                 value += ' - ' + char.charName;
-                                var xp = Math.round((char.experience - levelEXP[char.level])/(levelEXP[parseInt(char.level, 10) + 1] - levelEXP[char.level])*100);
+                                var xp = Math.round((char.experience - levelEXP[char.level])/(levelEXP[parseInt(char.level, 10) + 1] - levelEXP[char.level])*100)/100;
 
-                                value += ' (' + char.level + '.' + xp + ')';
+                                value += ' (' + (parseInt(char.level, 10) + xp) + ')';
                                 value += (char.online === '1' ? ' -- Online' : '') + '\n\n';
                             });
                         var person = {
