@@ -229,9 +229,9 @@ var SampleApp = function() {
         });
 
         //Start the poe trade cron job
-        var poeTradeJob = new CronJob('00 */10 * * * *', function(){
-            getTradeChecks();
-        }, null, true);
+        //var poeTradeJob = new CronJob('00 */10 * * * *', function(){
+        //    getTradeChecks();
+        //}, null, true);
     };
 
     self.getSteamStatus = function(req, res){
