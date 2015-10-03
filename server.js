@@ -10,6 +10,8 @@ var Q = require('q');
 var CronJob = require('cron').CronJob;
 var cheerio = require('cheerio');
 var elasticsearch = require('elasticsearch');
+var experience = require('./assets/js/experience.js');
+
 
 /**
  *  Define the sample application.
@@ -318,22 +320,14 @@ var SampleApp = function() {
                     allPromises.push(getPoEAccountInfo(user.poe.poeAccountName));
                 });
 
+                //Manually add Hemmar, he's not in the DB
+                allPromises.push(getPoEAccountInfo('hemmar'));
+
                 Q.all(allPromises).done(handleData);
             });
 
             function handleData(accounts){
-                var levelEXP = {
-                    88: 1646943474,
-                    89: 1784977296,
-                    90: 1934009687,
-                    91: 2094900291,
-                    92: 2268549086,
-                    93: 2455921256,
-                    94: 2658074992,
-                    95: 2876116901,
-                    96: 3111280300,
-                    97: 3364828162
-                };
+                var levelEXP = experience.xp;
                 var fields = [];
                 _.forEach(accounts, function(account){
                     if(!_.isEmpty(account) && _.isObject(account)){
@@ -346,9 +340,14 @@ var SampleApp = function() {
                             .forEach(function(char){
                                 accountName = char.accountName;
                                 value += ' - ' + char.charName;
-                                var xp = Math.round((char.experience - levelEXP[char.level])/(levelEXP[parseInt(char.level, 10) + 1] - levelEXP[char.level])*100)/100;
 
-                                value += ' (' + (parseInt(char.level, 10) + xp) + ')';
+                                if(char.level >= 50){
+                                    var xp = Math.round((char.experience - levelEXP[char.level])/(levelEXP[parseInt(char.level, 10) + 1] - levelEXP[char.level])*100)/100;
+                                    value += ' (' + (parseInt(char.level, 10) + xp) + ')';
+                                }else{
+                                    value += ' (' + char.level + ')';
+                                }
+
                                 value += (char.online === '1' ? ' -- Online' : '') + '\n\n';
                             });
                         var person = {
@@ -561,7 +560,7 @@ var SampleApp = function() {
 
         //Get the ladder stats for this account
         request({
-            url: 'http://api.exiletools.com/ladder?league=warbands&short=1&accountName='+accountName,
+            url: 'http://api.exiletools.com/ladder?league=flashback2&short=1&accountName='+accountName,
             method: 'GET',
             json: true
         }, function(error, resp, body){
