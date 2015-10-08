@@ -320,8 +320,9 @@ var SampleApp = function() {
                     allPromises.push(getPoEAccountInfo(user.poe.poeAccountName));
                 });
 
-                //Manually add Hemmar, he's not in the DB
+                //Manually add people not in the DB
                 allPromises.push(getPoEAccountInfo('hemmar'));
+                allPromises.push(getPoEAccountInfo('Thorthethunder2013'));
 
                 Q.all(allPromises).done(handleData);
             });
