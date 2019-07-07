@@ -45,19 +45,6 @@ var SampleApp = function() {
             self.ipaddress = "127.0.0.1";
         }
 
-        self.webhookURLs = {
-            STEAM_STATUS: 'https://hooks.slack.com/services/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',
-            LIFT: 'https://hooks.slack.com/services/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',
-            POE_STATUS: 'https://hooks.slack.com/services/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',
-            HARGANS_TRADE_WATCH: 'https://hooks.slack.com/services/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'
-        };
-
-        self.webhookTokens = {
-            STEAM_STATUS: 'H881BlB0P9inb5staqKemTON',
-            LIFT: 'tBtgwXX3wHGiMyxENbRe8SAp',
-            POE_STATUS: 'lqKyHvF8tUfgmQKH0jmUUiwF'
-        };
-
         self.hargan = {
             sassLevel: 40, //start at 40 to avoid never talking after new upload -- should be in DB...
             quotes: [
